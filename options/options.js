@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   breakInterval: 25,
   categories: { social: true, streaming: true, news: true, messaging: true },
   customDomains: [],
-  enabled: true,
+  enabled: false,
   focusMode: false,
   todayLog: [],
   weeklyLogs: {},
@@ -401,6 +401,8 @@ btnReset.addEventListener("click", async () => {
   try {
     await chrome.storage.local.clear();
     await chrome.storage.local.set({ ...DEFAULT_SETTINGS });
+    await safeSendMessage({ type: "TOGGLE_ENABLED", enabled: false }).catch(() => {});
+    await safeSendMessage({ type: "SET_EYE_PROTECTION", enabled: false, intensity: 2 }).catch(() => {});
     showToast(STRINGS.reset);
     loadSettings();
   } catch (err) {

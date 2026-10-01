@@ -9,6 +9,7 @@
     eye: "sco-eye-overlay",
     banner: "sco-banner",
     focus: "sco-focus-block",
+    breakBanner: "sco-break-banner",
   };
 
   const STRINGS = {
@@ -18,6 +19,8 @@
     doneBtn: "Done for tonight",
     focusTitle: "Focus Mode Active",
     focusMsg: "This site is blocked during your bedtime hours. Get some rest!",
+    breakTitle: "Eye Break Time",
+    breakMsg: "Look at something 20 feet away for 20 seconds.",
   };
 
   const getRoot = () => document.body || document.documentElement;
@@ -70,11 +73,34 @@
       </div>
     `;
     getRoot()?.appendChild(banner);
-    document.getElementById("sco-snooze-btn")?.addEventListener("click", () => chrome.runtime.sendMessage({ type: "SNOOZE", minutes: 10 }));
-    document.getElementById("sco-done-btn")?.addEventListener("click", () => chrome.runtime.sendMessage({ type: "DONE_TONIGHT" }));
+    document.getElementById("sco-snooze-btn")?.addEventListener("click", () => {
+      removeDim();
+      chrome.runtime.sendMessage({ type: "SNOOZE", minutes: 10 });
+    });
+    document.getElementById("sco-done-btn")?.addEventListener("click", () => {
+      removeDim();
+      chrome.runtime.sendMessage({ type: "DONE_TONIGHT" });
+    });
   }
 
   function removeBanner() { getEl(IDS.banner)?.remove(); }
+
+  function showBreakReminder() {
+    getEl(IDS.breakBanner)?.remove();
+    const banner = document.createElement("div");
+    banner.id = IDS.breakBanner;
+    banner.innerHTML = `
+      <div class="sco-break-icon">👁️</div>
+      <div>
+        <div class="sco-break-text">${STRINGS.breakTitle}</div>
+        <div class="sco-break-sub">${STRINGS.breakMsg}</div>
+      </div>
+      <button class="sco-break-dismiss" id="sco-break-dismiss-btn" title="Dismiss">✕</button>
+    `;
+    getRoot()?.appendChild(banner);
+    document.getElementById("sco-break-dismiss-btn")?.addEventListener("click", () => banner.remove());
+    setTimeout(() => { banner?.remove(); }, 20000);
+  }
 
   function showFocusBlock() {
     if (getEl(IDS.focus)) return;
@@ -109,6 +135,10 @@
           console.log("[SCO] EYE_PROTECT message:", { enabled: msg.enabled, opacity: msg.opacity });
           if (msg.enabled) applyEyeProtection(msg.opacity);
           else removeEyeProtection();
+          break;
+        case "BREAK_REMIND":
+          console.log("[SCO] BREAK_REMIND message received");
+          showBreakReminder();
           break;
         case "FOCUS_BLOCK": 
           console.log("[SCO] FOCUS_BLOCK message received");

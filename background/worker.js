@@ -409,9 +409,14 @@ async function broadcastEyeProtection(enabled, intensity) {
  */
 async function broadcastBreakRemind() {
   try {
-    const [win] = await chrome.windows.getAll({ populate: true, windowTypes: ["normal"] });
-    if (!win) return;
-    const activeTab = win.tabs?.find(t => t.active);
+    let activeTab;
+    const [focusedTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (focusedTab) {
+      activeTab = focusedTab;
+    } else {
+      const [anyActiveTab] = await chrome.tabs.query({ active: true });
+      activeTab = anyActiveTab;
+    }
     if (!isInjectableTab(activeTab)) return;
     await ensureTabScripts(activeTab);
     chrome.tabs.sendMessage(activeTab.id, { type: "BREAK_REMIND" }).catch(() => {});
@@ -741,10 +746,15 @@ chrome.commands.onCommand.addListener(async (command) => {
       await broadcastEyeProtection(next, eyeIntensity);
     }
     if (command === "toggle-dimming") {
-      const { enabled = true } = await chrome.storage.local.get("enabled");
+      const { enabled = false } = await chrome.storage.local.get("enabled");
       const next = !enabled;
       await chrome.storage.local.set({ enabled: next });
-      if (!next) await broadcastUndim();
+      if (!next) {
+        await broadcastUndim();
+        await updateBadge(0);
+      } else {
+        await activateDimming();
+      }
     }
   } catch (err) {
     console.error("onCommand error:", err);
@@ -891,18 +901,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
         case "GET_CURRENT_DIM_STATE": {
           const {
-            enabled = true, dimIntensity = 3,
+            enabled = false, dimIntensity = 3,
             eyeProtection = false, eyeIntensity = 2,
-            bedtime = "23:00", warningMinutes = 30, wakeTime = "07:00"
+            bedtime = "23:00", warningMinutes = 30, wakeTime = "07:00",
+            doneTonightTs = null,
           } = await chrome.storage.local.get([
             "enabled", "dimIntensity", "eyeProtection", "eyeIntensity",
-            "bedtime", "warningMinutes", "wakeTime"
+            "bedtime", "warningMinutes", "wakeTime", "doneTonightTs"
           ]);
           
+          let isDoneTonight = false;
+          if (doneTonightTs) {
+            const doneDate = new Date(doneTonightTs).toDateString();
+            const todayDate = new Date().toDateString();
+            if (doneDate === todayDate) {
+              isDoneTonight = true;
+            } else {
+              await chrome.storage.local.remove("doneTonightTs");
+            }
+          }
+
           let dimOpacity = 0;
           let activePhase = 0;
           
-          if (enabled) {
+          if (enabled && !isDoneTonight) {
               const { phase } = getBedtimePhase(bedtime, warningMinutes, wakeTime);
               activePhase = Math.max(phase, 1);
               dimOpacity = phaseOpacity(dimIntensity, activePhase);
@@ -912,7 +934,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const eyeOpacity = EYEMAP[eyeIntensity] || 0.07;
           
           sendResponse({
-             enabled,
+             enabled: enabled && !isDoneTonight,
              opacity: dimOpacity,
              phase: activePhase,
              eyeProtection,
@@ -1019,7 +1041,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
  * Storage changed — reschedule alarms when bedtime settings change.
  */
 chrome.storage.onChanged.addListener(async (changes) => {
-  if (changes.bedtime || changes.warningMinutes) {
+  if (changes.bedtime || changes.warningMinutes || changes.wakeTime) {
     await scheduleAlarms();
   }
   if (changes.breakReminders || changes.breakInterval) {
@@ -1031,5 +1053,8 @@ chrome.storage.onChanged.addListener(async (changes) => {
     const { eyeProtection = false, eyeIntensity = 2 } =
       await chrome.storage.local.get(["eyeProtection", "eyeIntensity"]);
     await broadcastEyeProtection(eyeProtection, eyeIntensity);
+  }
+  if (changes.enabled || changes.dimIntensity) {
+    await activateDimming();
   }
 });

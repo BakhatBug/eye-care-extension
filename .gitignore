@@ -21,3 +21,7 @@ desktop.ini
 # Internal Docs / Debugging Summaries
 DIMMER_FIX_SUMMARY.md
 task.md
+
+# Tooling Artifacts
+.graphify_python
+graphify-out/

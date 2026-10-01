@@ -158,16 +158,24 @@ toggleFocus.addEventListener("change", async () => {
   updateToggleStyles();
 });
 
-btnSnooze.addEventListener("click", () => {
-  safeSendMessage({ type: "SNOOZE", minutes: 30 });
+btnSnooze.addEventListener("click", async () => {
+  await safeSendMessage({ type: "SNOOZE", minutes: 30 });
+  btnSnooze.textContent = "Snoozed 30m";
+  setTimeout(() => { btnSnooze.textContent = "😴 Snooze"; }, 2000);
+  loadStats();
 });
 
-btnDone.addEventListener("click", () => {
-  safeSendMessage({ type: "DONE_TONIGHT" });
+btnDone.addEventListener("click", async () => {
+  await safeSendMessage({ type: "DONE_TONIGHT" });
+  btnDone.textContent = "Done!";
+  setTimeout(() => { btnDone.textContent = "✅ Done"; }, 2000);
+  loadStats();
 });
 
-btnTest.addEventListener("click", () => {
-  safeSendMessage({ type: "TEST_DIM", phase: 3 });
+btnTest.addEventListener("click", async () => {
+  await safeSendMessage({ type: "TEST_DIM", phase: 3 });
+  btnTest.textContent = "Testing...";
+  setTimeout(() => { btnTest.textContent = "Test Dim"; }, 2000);
 });
 
 btnSettings.addEventListener("click", () => {
@@ -176,8 +184,8 @@ btnSettings.addEventListener("click", () => {
 
 btnCloseDisruptors.addEventListener("click", async () => {
   const res = await safeSendMessage({ type: "CLOSE_DISRUPTORS" });
-  if (res?.closed) btnCloseDisruptors.textContent = `Closed ${res.closed} tabs`;
-  setTimeout(() => btnCloseDisruptors.textContent = "🧹 Close Disruptors", 2000);
+  if (res?.closed !== undefined) btnCloseDisruptors.textContent = `Closed ${res.closed} tabs`;
+  setTimeout(() => { btnCloseDisruptors.textContent = "🧹 Close Disruptors"; }, 2000);
 });
 
 collapseTrigger.addEventListener("click", () => {
@@ -187,10 +195,33 @@ collapseTrigger.addEventListener("click", () => {
 
 /* ── Breathing Exercise ── */
 let breathing = false;
+let breatheTimer = null;
 btnBreathe.addEventListener("click", () => {
   breathing = !breathing;
-  btnBreathe.textContent = breathing ? "Stop Exercise" : "Start Exercise";
-  // Simplified version for the compact UI
+  if (!breathing) {
+    clearInterval(breatheTimer);
+    btnBreathe.textContent = "Start Exercise";
+    btnBreathe.classList.remove("btn-primary");
+    btnBreathe.classList.add("btn-secondary");
+    return;
+  }
+  btnBreathe.classList.remove("btn-secondary");
+  btnBreathe.classList.add("btn-primary");
+  // 4-7-8 breathing cycle: 4s Inhale, 7s Hold, 8s Exhale (total 19s)
+  let count = 0;
+  function tick() {
+    const cycleTime = count % 19;
+    if (cycleTime < 4) {
+      btnBreathe.textContent = `Inhale... (${4 - cycleTime}s)`;
+    } else if (cycleTime < 11) {
+      btnBreathe.textContent = `Hold... (${11 - cycleTime}s)`;
+    } else {
+      btnBreathe.textContent = `Exhale... (${19 - cycleTime}s)`;
+    }
+    count++;
+  }
+  tick();
+  breatheTimer = setInterval(tick, 1000);
 });
 
 /* ── Init ── */
